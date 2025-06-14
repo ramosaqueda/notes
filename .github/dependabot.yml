@@ -1,0 +1,103 @@
+# ===============================================
+# Dependabot Configuration
+# Actualización automática de dependencias
+# ===============================================
+
+version: 2
+updates:
+  # ===============================================
+  # NPM Dependencies
+  # ===============================================
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Santiago"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "tu-usuario-github"  # Reemplazar con tu usuario
+    assignees:
+      - "tu-usuario-github"  # Reemplazar con tu usuario
+    labels:
+      - "dependencies"
+      - "security"
+      - "npm"
+    commit-message:
+      prefix: "⬆️"
+      include: "scope"
+    ignore:
+      # Ignorar major versions de estas dependencias críticas
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-scripts"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Agrupar actualizaciones de React
+      react:
+        patterns:
+          - "react*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Agrupar actualizaciones de testing
+      testing:
+        patterns:
+          - "@testing-library/*"
+          - "jest*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Agrupar actualizaciones de seguridad
+      security:
+        patterns:
+          - "eslint*"
+          - "prettier"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ===============================================
+  # Docker Dependencies
+  # ===============================================
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "America/Santiago"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "tu-usuario-github"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "security"
+    commit-message:
+      prefix: "🐳"
+      include: "scope"
+
+  # ===============================================
+  # GitHub Actions Dependencies
+  # ===============================================
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+      timezone: "America/Santiago"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "tu-usuario-github"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci-cd"
+    commit-message:
+      prefix: "🔧"
+      include: "scope"

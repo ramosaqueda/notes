@@ -1,0 +1,92 @@
+# ===============================================
+# Nginx Server Configuration - MiApp Segura React
+# Configuración específica para la aplicación
+# ===============================================
+
+server {
+    listen 8080;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html index.htm;
+
+    # Configuración de logs específica
+    access_log /var/log/nginx/access.log main;
+    error_log /var/log/nginx/error.log error;
+
+    # Configuración de seguridad adicional
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Rate limiting para rutas específicas
+    location /api/ {
+        limit_req zone=api burst=20 nodelay;
+        # Aquí irían las configuraciones de proxy si tuvieras una API
+        return 404;
+    }
+
+    # Configuración para archivos estáticos de React
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        add_header X-Content-Type-Options nosniff;
+        try_files $uri =404;
+    }
+
+    # Configuración para el manifiesto y service worker
+    location ~* \.(json|webmanifest)$ {
+        expires 1d;
+        add_header Cache-Control "public";
+        add_header X-Content-Type-Options nosniff;
+    }
+
+    # Configuración principal para React Router (SPA)
+    location / {
+        try_files $uri $uri/ /index.html;
+        
+        # Headers de seguridad para HTML
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        
+        # No cache para HTML principal
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+    }
+
+    # Bloquear acceso a archivos sensibles
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Bloquear acceso a archivos de configuración
+    location ~* \.(env|git|gitignore|dockerignore)$ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+
+    # Página de error personalizada
+    error_page 404 /404.html;
+    location = /404.html {
+        internal;
+        root /usr/share/nginx/html;
+    }
+
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        internal;
+        root /usr/share/nginx/html;
+    }
+}

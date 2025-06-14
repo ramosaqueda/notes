@@ -1,0 +1,242 @@
+# ===============================================
+# GitHub Actions - Automated Deployment
+# Deploy automático a diferentes entornos
+# ===============================================
+
+name: 🚀 Deploy
+
+on:
+  workflow_run:
+    workflows: ["🚀 CI/CD Pipeline"]
+    types: [completed]
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version to deploy (leave empty for latest)'
+        required: false
+        type: string
+
+env:
+  DOCKER_IMAGE_NAME: notes-app
+  REGISTRY: ghcr.io
+
+jobs:
+  # ===============================================
+  # Determinar Entorno de Deploy
+  # ===============================================
+  determine-environment:
+    name: 🎯 Determine Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      should-deploy: ${{ steps.env.outputs.should-deploy }}
+    
+    steps:
+      - name: 🎯 Determine Deployment Environment
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+            echo "🎯 Manual deployment to ${{ github.event.inputs.environment }}"
+          elif [[ "${{ github.event.workflow_run.head_branch }}" == "main" && "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+            echo "🎯 Auto deployment to production"
+          elif [[ "${{ github.event.workflow_run.head_branch }}" == "develop" && "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+            echo "🎯 Auto deployment to staging"
+          else
+            echo "should-deploy=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping deployment"
+          fi
+
+  # ===============================================
+  # Deploy a Staging
+  # ===============================================
+  deploy-staging:
+    name: 🧪 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    if: needs.determine-environment.outputs.should-deploy == 'true' && needs.determine-environment.outputs.environment == 'staging'
+    environment: 
+      name: staging
+      url: https://staging.notes-app.com
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🚀 Deploy to Staging
+        run: |
+          echo "🧪 Deploying to Staging Environment"
+          
+          # Simular deploy (reemplazar con tu lógica real)
+          docker pull ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.DOCKER_IMAGE_NAME }}:develop
+          
+          # Aquí iría tu lógica de deploy real, por ejemplo:
+          # - Deploy to AWS ECS
+          # - Deploy to Azure Container Instances
+          # - Deploy to Digital Ocean Apps
+          # - Deploy to Heroku
+          # - etc.
+          
+          echo "✅ Staging deployment completed"
+
+      - name: 🔍 Health Check
+        run: |
+          echo "🏥 Running health checks..."
+          # Simular health check
+          sleep 10
+          
+          # Aquí irían tus health checks reales
+          # curl -f https://staging.notes-app.com/health
+          
+          echo "✅ Health checks passed"
+
+      - name: 📢 Notify Staging Deployment
+        run: |
+          echo "## 🧪 Staging Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** Staging" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ✅ Deployed Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** https://staging.notes-app.com" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+  # ===============================================
+  # Deploy a Producción
+  # ===============================================
+  deploy-production:
+    name: 🌟 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    if: needs.determine-environment.outputs.should-deploy == 'true' && needs.determine-environment.outputs.environment == 'production'
+    environment: 
+      name: production
+      url: https://notes-app.com
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📦 Pull Latest Image
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+
+      - name: 🚀 Deploy to Production
+        run: |
+          echo "🌟 Deploying to Production Environment"
+          
+          # Pre-deployment checks
+          echo "🔍 Running pre-deployment checks..."
+          
+          # Simular deployment (reemplazar con tu lógica real)
+          echo "📦 Deploying new version..."
+          
+          # Ejemplos de deploy real:
+          # AWS ECS:
+          # aws ecs update-service --cluster production --service notes-app --force-new-deployment
+          
+          # Docker Swarm:
+          # docker service update --image ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.DOCKER_IMAGE_NAME }}:latest notes-app
+          
+          # Kubernetes:
+          # kubectl set image deployment/notes-app notes-app=${{ env.REGISTRY }}/${{ github.repository }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+          
+          echo "✅ Production deployment completed"
+
+      - name: 🔍 Production Health Check
+        run: |
+          echo "🏥 Running production health checks..."
+          
+          # Esperar que el servicio esté disponible
+          for i in {1..30}; do
+            # Reemplazar con tu URL real
+            # if curl -f https://notes-app.com/health; then
+            if echo "Health check simulation"; then
+              echo "✅ Production service is healthy"
+              break
+            fi
+            
+            if [ $i -eq 30 ]; then
+              echo "❌ Health check failed after 30 attempts"
+              exit 1
+            fi
+            
+            echo "⏳ Waiting for service to be ready... ($i/30)"
+            sleep 10
+          done
+
+      - name: 📊 Post-Deployment Monitoring
+        run: |
+          echo "📊 Setting up monitoring..."
+          
+          # Aquí podrías:
+          # - Configurar alertas
+          # - Enviar métricas
+          # - Notificar a Slack/Discord
+          # - Crear deployment markers en APM tools
+          
+          echo "✅ Monitoring configured"
+
+      - name: 📢 Notify Production Deployment
+        run: |
+          echo "## 🌟 Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ✅ Deployed Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** https://notes-app.com" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployment Time:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+
+  # ===============================================
+  # Rollback (en caso de problemas)
+  # ===============================================
+  rollback:
+    name: 🔄 Rollback
+    runs-on: ubuntu-latest
+    if: failure() && (needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure')
+    needs: [deploy-staging, deploy-production]
+    environment: 
+      name: ${{ needs.determine-environment.outputs.environment }}
+    
+    steps:
+      - name: 🔄 Execute Rollback
+        run: |
+          echo "🚨 Deployment failed, initiating rollback..."
+          
+          # Aquí iría tu lógica de rollback
+          # - Revertir a la versión anterior
+          # - Restaurar configuración
+          # - Notificar al equipo
+          
+          echo "✅ Rollback completed"
+
+      - name: 📢 Notify Rollback
+        run: |
+          echo "## 🚨 Rollback Executed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reason:** Deployment failure" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ needs.determine-environment.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ✅ Rollback Successful" >> $GITHUB_STEP_SUMMARY

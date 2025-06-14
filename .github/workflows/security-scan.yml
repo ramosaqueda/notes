@@ -1,0 +1,236 @@
+# ===============================================
+# GitHub Actions - Security Scanning
+# Análisis de seguridad profundo
+# ===============================================
+
+name: 🛡️ Security Scan
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Ejecutar cada lunes a las 2 AM
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'package*.json'
+      - 'Dockerfile'
+      - '.github/workflows/security-scan.yml'
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  # ===============================================
+  # Análisis de Dependencias
+  # ===============================================
+  dependency-scan:
+    name: 📦 Dependency Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📋 Install Dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 🔍 NPM Audit (Detailed)
+        run: |
+          echo "## 🔍 NPM Security Audit Report" >> $GITHUB_STEP_SUMMARY
+          
+          # Crear reporte detallado
+          npm audit --json > audit-report.json || true
+          
+          if [ -s audit-report.json ]; then
+            # Contar vulnerabilidades por severidad
+            CRITICAL=$(jq -r '.vulnerabilities | map(select(.severity == "critical")) | length' audit-report.json)
+            HIGH=$(jq -r '.vulnerabilities | map(select(.severity == "high")) | length' audit-report.json)
+            MODERATE=$(jq -r '.vulnerabilities | map(select(.severity == "moderate")) | length' audit-report.json)
+            LOW=$(jq -r '.vulnerabilities | map(select(.severity == "low")) | length' audit-report.json)
+            
+            echo "### Vulnerabilities by Severity:" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔴 Critical: $CRITICAL" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟠 High: $HIGH" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟡 Moderate: $MODERATE" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟢 Low: $LOW" >> $GITHUB_STEP_SUMMARY
+            
+            # Fallar si hay vulnerabilidades críticas o altas
+            if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+              echo "❌ Critical or High severity vulnerabilities found!"
+              echo "### 🚨 Action Required:" >> $GITHUB_STEP_SUMMARY
+              echo "Run \`npm audit fix\` to resolve security issues." >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+          else
+            echo "✅ No vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: 📤 Upload Audit Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: audit-report.json
+          retention-days: 90
+
+  # ===============================================
+  # Análisis de Secretos
+  # ===============================================
+  secret-scan:
+    name: 🔐 Secret Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔍 Run TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  # ===============================================
+  # Análisis de Imagen Docker
+  # ===============================================
+  container-scan:
+    name: 🐳 Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐳 Build Docker Image
+        run: |
+          docker build -t notes-app:scan .
+
+      - name: 🔍 Run Trivy Container Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'notes-app:scan'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: 🔍 Run Trivy Config Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-config.sarif'
+
+      - name: 📤 Upload Trivy Config Results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-config.sarif'
+
+  # ===============================================
+  # Análisis de Licencias
+  # ===============================================
+  license-scan:
+    name: 📄 License Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📋 Install Dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: 🔍 Check Licenses
+        run: |
+          npx license-checker --summary > license-summary.txt
+          npx license-checker --json > license-report.json
+          
+          echo "## 📄 License Summary" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          head -20 license-summary.txt >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: 📤 Upload License Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: |
+            license-summary.txt
+            license-report.json
+          retention-days: 90
+
+  # ===============================================
+  # SAST (Static Application Security Testing)
+  # ===============================================
+  sast-scan:
+    name: 🔬 SAST Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/react
+            p/javascript
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+  # ===============================================
+  # Resumen de Seguridad
+  # ===============================================
+  security-summary:
+    name: 📊 Security Summary
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, secret-scan, container-scan, license-scan, sast-scan]
+    if: always()
+    
+    steps:
+      - name: 📊 Generate Security Summary
+        run: |
+          echo "## 🛡️ Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan Type | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Scan | ${{ needs.dependency-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | NPM packages security check |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Detection | ${{ needs.secret-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | No secrets found in code |" >> $GITHUB_STEP_SUMMARY
+          echo "| Container Scan | ${{ needs.container-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | Docker image vulnerability scan |" >> $GITHUB_STEP_SUMMARY
+          echo "| License Check | ${{ needs.license-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | License compliance verification |" >> $GITHUB_STEP_SUMMARY
+          echo "| SAST Analysis | ${{ needs.sast-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} | Static code analysis |" >> $GITHUB_STEP_SUMMARY
+          
+          # Determinar estado general
+          if [[ "${{ needs.dependency-scan.result }}" == "success" && 
+                "${{ needs.secret-scan.result }}" == "success" && 
+                "${{ needs.container-scan.result }}" == "success" && 
+                "${{ needs.license-scan.result }}" == "success" && 
+                "${{ needs.sast-scan.result }}" == "success" ]]; then
+            echo "### 🎉 All security scans passed!" >> $GITHUB_STEP_SUMMARY
+            echo "Your application meets security standards. 🔒" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Some security scans failed" >> $GITHUB_STEP_SUMMARY
+            echo "Please review the failed scans and address security issues." >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,12 +1,15 @@
 {
   "name": "notes",
   "version": "0.1.0",
+  "description": "Aplicación de notas segura con pipeline DevSecOps - Taller Evaluado",
   "private": true,
+  "homepage": ".",
   "dependencies": {
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
+    "lucide-react": "^0.515.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-scripts": "5.0.1",
@@ -16,13 +19,58 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    
+    "lint": "eslint src/ --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint src/ --ext .js,.jsx,.ts,.tsx --fix",
+    "lint:report": "eslint src/ --ext .js,.jsx,.ts,.tsx --format json --output-file eslint-report.json",
+    
+    "security:audit": "npm audit --audit-level=moderate",
+    "security:fix": "npm audit fix",
+    "security:check": "npm run lint && npm run security:audit",
+    
+    "format": "prettier --write src/**/*.{js,jsx,ts,tsx,css,md,json}",
+    "format:check": "prettier --check src/**/*.{js,jsx,ts,tsx,css,md,json}",
+    
+    "test:coverage": "react-scripts test --coverage --watchAll=false",
+    "test:ci": "CI=true react-scripts test --coverage --watchAll=false",
+    
+    "analyze": "npm run build && npx webpack-bundle-analyzer build/static/js/*.js",
+    "serve": "serve -s build -l 3000",
+    
+    "docker:build": "docker build -t notes-app .",
+    "docker:run": "docker run -p 3000:80 notes-app",
+    "docker:compose": "docker-compose up --build",
+    
+    "precommit": "npm run lint:fix && npm run format && npm run test:ci",
+    "prebuild": "npm run security:check && npm run test:ci"
   },
   "eslintConfig": {
     "extends": [
       "react-app",
       "react-app/jest"
-    ]
+    ],
+    "plugins": [
+      "security"
+    ],
+    "rules": {
+      "security/detect-object-injection": "warn",
+      "security/detect-non-literal-regexp": "warn",
+      "security/detect-unsafe-regex": "error",
+      "security/detect-buffer-noassert": "error",
+      "security/detect-child-process": "warn",
+      "security/detect-disable-mustache-escape": "error",
+      "security/detect-eval-with-expression": "error",
+      "security/detect-no-csrf-before-method-override": "error",
+      "security/detect-non-literal-fs-filename": "warn",
+      "security/detect-non-literal-require": "warn",
+      "security/detect-possible-timing-attacks": "warn",
+      "security/detect-pseudoRandomBytes": "error",
+      "no-eval": "error",
+      "no-implied-eval": "error",
+      "no-new-func": "error",
+      "no-script-url": "error"
+    }
   },
   "browserslist": {
     "production": [
@@ -35,5 +83,51 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  }
+  },
+  "jest": {
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx}",
+      "!src/index.js",
+      "!src/reportWebVitals.js",
+      "!src/setupTests.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 50,
+        "functions": 50,
+        "lines": 50,
+        "statements": 50
+      }
+    },
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
+  },
+  "prettier": {
+    "semi": true,
+    "trailingComma": "es5",
+    "singleQuote": true,
+    "printWidth": 80,
+    "tabWidth": 2,
+    "useTabs": false
+  },
+  "devDependencies": {
+    "eslint-plugin-security": "^3.0.1",
+    "prettier": "^3.5.3",
+    "serve": "^14.2.4"
+  },
+  "keywords": [
+    "react",
+    "devsecops",
+    "security",
+    "ci-cd",
+    "docker",
+    "notes-app",
+    "taller",
+    "evaluado"
+  ],
+  "author": "Estudiante DevSecOps",
+  "license": "MIT"
 }
