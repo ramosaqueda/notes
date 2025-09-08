@@ -116,7 +116,7 @@
   "devDependencies": {
     "eslint-plugin-security": "^3.0.1",
     "prettier": "^3.5.3",
-    "serve": "^14.2.4"
+    "serve": "^14.2.5"
   },
   "keywords": [
     "react",
