@@ -135,7 +135,7 @@ jobs:
           output: 'trivy-config.sarif'
 
       - name: 📤 Upload Trivy Config Results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-config.sarif'
